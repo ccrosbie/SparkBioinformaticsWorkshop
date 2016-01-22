@@ -1,86 +1,69 @@
+#big data small learning example
+
 #load the Spark context into RStudio
 .libPaths(c(.libPaths(), '/usr/lib/spark/R/lib'))  
 Sys.setenv(SPARK_HOME = '/usr/lib/spark') 
 library(SparkR) 
 sc <- sparkR.init("local") 
-sqlContext <- sparkRSQL.init(sc) 
+sqlContext <- sparkRSQL.init(sc)
 
-padd_url_star = "S3://crosbie-tutorials/PRAD2/cgcc/broad.mit.edu/genome_wide_snp_6/snp/*"
-#broad.mit.edu_PRAD.Genome_Wide_SNP_6.Level_3.108.1002.0/*
+#broad institution, SNP data type, Level 3 (normalized copy number and purity/ploidy/data per sample.), 
+s3url <- "s3://crosbie-tutorials/PRAD2/cgcc/broad.mit.edu/genome_wide_snp_6/snp/broad.mit.edu_PRAD.Genome_Wide_SNP_6.Level_3.108.1002.0/*"
 
-broad_SNP_6 <- SparkR:::textFile(sc, padd_url_star)
-print(SparkR:::take(broad_SNP_6,15))
+print(s3url)
+
+broad_SNP_6 <- SparkR:::textFile(sc, s3url)
+count(broad_SNP_6) #26,087
+
+lines <- textFile(sc, s3url)
+
+#convert to SparkR dataframe. 
 broad_SNP_6_DF <- (SparkR:::toDF(broad_SNP_6))
 
-#could pull results into local
-#localDf <- collect(broad_SNP_6_DF)
-#lets you do normal R operations you cant do in SparkR
-#for (i in localDf)
-#{
-#  print(i)
-#}
-
-#head 
-head(broad_SNP_6_DF)
-
-#schema
-printSchema(broad_SNP_6_DF)
-
-#get basic information 
+#what is this now?
 broad_SNP_6_DF
 
-#register this DataFrame as a table.
+#lets take a look
+head(broad_SNP_6_DF)
+
+#register this DataFrame as a table so we can explore with SQL 
 registerTempTable(broad_SNP_6_DF,"broad_SNP_6_DF")
 
-x <- sql(sqlContext, "select ")
+#only want to look at the GIRTH folders
+GIRTH_DATA <- sql(sqlContext, "select _1 as line from broad_SNP_6_DF WHERE _1 like 'GIRTH%'")
+head(GIRTH_DATA)
 
-#only want to look at the GIRTH folders. 
-GIRTH <- sql(sqlContext,"select * from broad_SNP_6_DF where _1 like 'GIRTH%' AND not like '%.gz'")
-count(GIRTH)
+INFO <- sql(sqlContext,"select * from broad_SNP_6_DF where _1 not like 'GIRTH%'")
+collect(INFO)
 
+#now we know how to parse the fields to get the means. 
+parseFields <-function(f) 
+{ 
+  x <- strsplit(f,"\t")
+}
+#lapply is like map. This is also how to scale our R functions across nodes.
+xxx <- SparkR:::lapply(broad_SNP_6,parseFields)
 
+xyz <- SparkR:::mapValues(broad_SNP_6,parseFields)
 
+#probably better ways to do this part. Pulls into R df and does a loop. 
+vals <- SparkR:::collect(xxx)
+mean_vals <- numeric()
+for (w in vals)
+{
+ for (ww in w[1])
+ {
+   if (ww[6] != "seg.mean")
+   {
+    print (ww[6]) 
+    mean_vals <- append(mean_vals,as.numeric(ww[6]))
+   }
+  }
+}
+#find the mean for the entire chromosome 
+print(mean(mean_vals))
 
-
-
-
-
-
-xData <- SparkR:::textFile(sc, padd_url_star)
-print(SparkR:::collect(xData)
-
-
-df2 <- read.df(sqlContext, padd_url, source = "com.databricks.spark.csv")
-head(df2)
-
-df3 <- read.df(sqlContext, padd_url)
-head(df3)
-
-
-dff <- createDataFrame(sqlContext,padd_url)
-
-
-df <- createDataFrame(sqlContext, faithful) 
-head(df)
-
-rdd <- SparkR:::textFile(sc, padd_url)
-print(rdd.collect())
-
-
-dfTr <- jsonFile(sqlContext, padd_url_star)
-head(dfTr)
-
-print (typeof(rdd))
+#could have done this for all of TCGA. 
 
 
-SparkR:::take(5)
-
-
-
-#df2 <- read.df(sqlContext, "README.md", source = "com.databricks.spark.csv")
-#showDF(limit(df2,5))
-#lines <- sqlContext.textFile(sc, padd_url)
-#print(padd_url)
-
-#big data small learning. 
 
